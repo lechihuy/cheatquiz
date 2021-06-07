@@ -33,7 +33,13 @@
   <div class="my-14 px-2">
     <div v-for="msg, msgId in filterMessages(filter)" :key="msgId" class="my-4 border border-black">
       <div class="px-3 py-2 text-white bg-gray-800 flex items-center">
-        <span>{{ msg.username }}</span>
+        <span>{{ msg.username }}
+          <span 
+            class="w-3 h-3 ml-1 inline-block rounded-full"
+            :class="[isOnline(msg.username) ? 'bg-green-400' : 'bg-gray-800']"
+          >
+          </span>
+        </span>
         <div class="ml-auto flex">
           <button class="text-green-400 p-1 flex items-center"
             v-if="msg.username !== username"
@@ -75,7 +81,9 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-                <span class="p-2 bg-green-400">{{ reply.username }}</span>
+                <span class="p-2"
+                  :class="[isOnline(reply.username) ? 'bg-green-400' : 'bg-gray-900']"
+                >{{ reply.username }}</span>
                 <span v-html="reply.message" class="p-2 flex-grow"></span>
               </div>
             </div>
@@ -123,10 +131,20 @@ export default {
       username: 'Huy',
       replyOnMsgId: null,
       filter: 'all',
-      hasNotificationForMe: false
+      hasNotificationForMe: false,
+      onlines: {}
     }
   },
   methods: {
+    isOnline(username) {
+      return (username in this.onlines)
+    },
+    online() {
+      firebase.database().ref(`online/${this.username}`).set(1)
+    },
+    offline() {
+      firebase.database().ref(`online/${this.username}`).remove()
+    },
     sendNotificationForAll(type) {
       firebase.database().ref(`notifications/all`).push({
         'username': this.username,
@@ -230,6 +248,16 @@ export default {
     do {
       this.username = prompt('Tên của mày??').trim()
     } while (this.username === null || this.username == '')
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState == "visible") {
+        this.online()
+      } else {
+        this.offline()
+      }
+    })
+
+    this.online()
     
     var messages = firebase.database().ref('messages')
     messages.on('value', (snapshot) => {
@@ -258,6 +286,13 @@ export default {
         audio.play()
         this.deleteNotificationForUser(app.username, notiId)
       }
+    });
+
+    var onlines = firebase.database().ref(`online`)
+    onlines.on('value', (snapshot) => {
+      let onlines = snapshot.val() 
+      app.onlines = onlines ?? {}
+      console.log(onlines)
     });
 
   },
