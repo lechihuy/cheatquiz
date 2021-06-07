@@ -24,6 +24,9 @@
         @click="filterMessages('your-message')"
       >
         Bạn hỏi
+        <span 
+          v-show="hasNotificationForMe"
+          class="w-3 h-3 ml-1 inline-block rounded-full bg-red-500"></span>
       </button>
     </div>
   </div>
@@ -119,10 +122,28 @@ export default {
       messages: null,
       username: 'Huy',
       replyOnMsgId: null,
-      filter: 'all'
+      filter: 'all',
+      hasNotificationForMe: false
     }
   },
   methods: {
+    sendNotificationForAll(type) {
+      firebase.database().ref(`notifications/all`).push({
+        'username': this.username,
+        'type': type
+      })
+    },
+    deleteNotificationForAll(notiId) {
+      firebase.database().ref(`notifications/all/${notiId}`).remove()
+    },
+    sendNotificationForUser(username, type) {
+      firebase.database().ref(`notifications/users/${username}`).push({
+        'type': type
+      })
+    },
+    deleteNotificationForUser(username, notiId) {
+      firebase.database().ref(`notifications/users/${username}/${notiId}`).remove()
+    },
     sendMessage() {
       if (this.message === null) return false
       
@@ -136,7 +157,16 @@ export default {
         
       this.message = null
       this.$refs.messageBox.innerHTML = ''
-      this.cancelReply()
+
+      var audio = new Audio(require(`../public/sounds/send.mp3`))
+      audio.play()
+
+      if (this.replyOnMsgId) {
+        this.sendNotificationForUser(this.messages[this.replyOnMsgId].username, 'reply')
+        this.cancelReply()
+      } else {
+        this.sendNotificationForAll('receive')
+      }
     },
     updateMessage(e) {
       this.message = e.target.innerHTML.trim();
@@ -182,6 +212,7 @@ export default {
       }
 
       if (filter == 'your-message') {
+        this.hasNotificationForMe = false
         for (let msgId in filterdMessages) {
           if (filterdMessages[msgId].username !== this.username) {
             delete filterdMessages[msgId]
@@ -193,18 +224,45 @@ export default {
     }
   },
   mounted() {
+    document.body.classList.add('bg-gray-900')
     let app = this
 
     do {
       this.username = prompt('Tên của mày??').trim()
     } while (this.username === null || this.username == '')
-
-    document.body.classList.add('bg-gray-900')
-    var messages = firebase.database().ref('messages');
+    
+    var messages = firebase.database().ref('messages')
     messages.on('value', (snapshot) => {
-      const data = snapshot.val();
+      const data = snapshot.val()
       app.messages = data
+    })
+
+    var allNotifications = firebase.database().ref('notifications/all')
+    allNotifications.on('value', (snapshot) => {
+      let notifications = snapshot.val() 
+      for (let notiId in notifications) {
+        if (notifications[notiId].username !== app.username) {
+          var audio = new Audio(require(`../public/sounds/${notifications[notiId].type}.mp3`))
+          audio.play()
+          this.deleteNotificationForAll(notiId)
+        }
+      }
+    })
+
+    var myNotifications = firebase.database().ref(`notifications/users/${this.username}`)
+    myNotifications.on('value', (snapshot) => {
+      let notifications = snapshot.val() 
+      for (let notiId in notifications) {
+        app.hasNotificationForMe = true
+        var audio = new Audio(require(`../public/sounds/${notifications[notiId].type}.mp3`))
+        audio.play()
+        this.deleteNotificationForUser(app.username, notiId)
+      }
     });
+
+  },
+  updated() {
+    document.documentElement.scrollTop = document.documentElement.scrollHeight;
   }
 }
 </script>
